@@ -49,7 +49,7 @@ def create_features_dataset(graph_dataset):
     dct = defaultdict(list)
 
     for G, t in graph_dataset:
-        
+
         list_degree = [x[1] for x in G.degree]
         dct["mean_degree"].append(np.mean(list_degree))
         dct["std_degree"].append(np.std(list_degree))
@@ -57,7 +57,7 @@ def create_features_dataset(graph_dataset):
         dct["kurtosis_degree"].append(sc.kurtosis(list_degree))
         dct["max_degree"].append(np.max(list_degree))
         dct["min_degree"].append(np.min(list_degree))
-        dct["assortativity_degree_coeff"].append(nx.degree_assortativity_coefficient(G)))
+        dct["assortativity_degree_coeff"].append(nx.degree_assortativity_coefficient(G))
 
         list_cluster_coeff = list(nx.clustering(G).values())
         dct["mean_cluster_coeff"].append(nx.average_clustering(G))
