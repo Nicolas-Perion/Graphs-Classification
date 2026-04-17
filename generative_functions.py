@@ -4,45 +4,49 @@ import pandas as pd
 import numpy as np
 import scipy.stats as sc
 from collections import defaultdict
+from sklearn.model_selection import train_test_split
 
 # Generative functions for graphs
 
-def generate_er(n, avg_degree):
+def _generate_er(n, avg_degree, seed=None):
     p = avg_degree / (n - 1)
-    return nx.erdos_renyi_graph(n, p)
+    return nx.erdos_renyi_graph(n, p, seed=seed)
 
-def generate_ba(n, avg_degree):
+def _generate_ba(n, avg_degree, seed=None):
     m = avg_degree // 2
-    return nx.barabasi_albert_graph(n, m)
+    return nx.barabasi_albert_graph(n, m, seed=seed)
 
-def generate_ws(n, avg_degree, rewiring = 0.1):
-    return nx.watts_strogatz_graph(n, avg_degree, rewiring)
+def _generate_ws(n, avg_degree, rewiring = 0.1, seed=None):
+    return nx.watts_strogatz_graph(n, avg_degree, rewiring, seed=seed)
 
-def generate_sbm(n, avg_degree):
+def _generate_sbm(n, avg_degree, seed=None):
 
     sizes = [n // 2, n // 2]
+    # The value of p_intra and p_inter ensure that the average degree is equal to avg_degree.
     p_intra = avg_degree / ((11*n / 20) - 1)
     p_inter = p_intra / 10
 
     probs = [[p_intra, p_inter],\
             [p_inter, p_intra]]
 
-    return nx.stochastic_block_model(sizes, probs)
+    return nx.stochastic_block_model(sizes, probs, seed=seed)
 
-# Generative functions for dataset
+# Generative functions for graph dataset
 
-def create_graph_dataset(n, avg_degree = [6, 8, 10, 12], num_graphs_per_class = 1000):
+def create_graph_dataset(n, avg_degree = [6, 8, 10, 12], num_graphs_per_class = 1000, seed=None):
 
     dataset = []
 
     for _ in range(num_graphs_per_class):
-        dataset.append((generate_er(n, avg_degree[0]), 0))
-        dataset.append((generate_ba(n, avg_degree[1]), 1))
-        dataset.append((generate_ws(n, avg_degree[2]), 2))
-        dataset.append((generate_sbm(n, avg_degree[3]), 3))
+        dataset.append((_generate_er(n, avg_degree[0] if isinstance(avg_degree, list) else avg_degree, seed=seed), 0))
+        dataset.append((_generate_ba(n, avg_degree[1] if isinstance(avg_degree, list) else avg_degree, seed=seed), 1))
+        dataset.append((_generate_ws(n, avg_degree[2] if isinstance(avg_degree, list) else avg_degree, seed=seed), 2))
+        dataset.append((_generate_sbm(n, avg_degree[3] if isinstance(avg_degree, list) else avg_degree, seed=seed), 3))
 
     random.shuffle(dataset) # Shuffle the dataset before splitting
     return dataset
+
+# Generative functions for features dataset
 
 def create_features_dataset(graph_dataset):
 
@@ -83,7 +87,7 @@ def create_features_dataset(graph_dataset):
         dct["max_b_centrality"].append(np.max(list_betweenness_centrality))
 
         try:
-            list_eigenvector_centrality = list(nx.eigenvector_centrality(G, max_iter=500).values())
+            list_eigenvector_centrality = list(nx.eigenvector_centrality(G_lcc, max_iter=500).values())
         except nx.PowerIterationFailedConvergence:
             list_eigenvector_centrality = [0.0] * G.number_of_nodes()
 
@@ -102,14 +106,45 @@ def create_features_dataset(graph_dataset):
 
     return pd.DataFrame(dct)
 
+# Splitting the features dataset
 
-def split_dataset(dataset, train_ratio = 0.7, val_ratio = 0.15):
-    n = len(dataset)
-    train_len = int(n * train_ratio)
-    val_len = int(n * val_ratio)
+def splitting(X, y = None, test_size = 0.15, val_size = 0.15, seed=None):
+    val_size = val_size / (1 - test_size)
 
-    train = dataset[:train_len]
-    val = dataset[train_len:train_len + val_len]
-    test = dataset[train_len + val_len:]
-    return train, val, test
+    if y is not None: # If y is not None, we are splitting datasets (of features) X and y
 
+        X_train_val, X_test, y_train_val, y_test = train_test_split(
+        X,
+        y,
+        test_size = test_size,
+        random_state = seed,
+        stratify = y
+        )
+
+        X_train, X_val, y_train, y_val = train_test_split(
+            X_train_val,
+            y_train_val,
+            test_size = val_size,
+            random_state = seed,
+            stratify = y_train_val
+        )
+
+        return X_train, X_val, X_test, y_train, y_val, y_test
+    
+    else: # If y is None, we are splitting a list (of tuples) X
+
+        X_train_val, X_test = train_test_split(
+            X,
+            test_size = test_size,
+            random_state = seed,
+            stratify = [t for _, t in X]
+        )
+
+        X_train, X_val = train_test_split(
+            X_train_val,
+            test_size = val_size,
+            random_state = seed,
+            stratify = [t for _, t in X_train_val]
+        )
+        
+        return X_train, X_val, X_test
